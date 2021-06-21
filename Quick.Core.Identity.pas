@@ -29,6 +29,8 @@
 
 unit Quick.Core.Identity;
 
+{$M+}
+
 {$i QuickCore.inc}
 
 interface

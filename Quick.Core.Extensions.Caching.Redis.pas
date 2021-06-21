@@ -29,6 +29,8 @@
 
 unit Quick.Core.Extensions.Caching.Redis;
 
+{$M+}
+
 {$i QuickCore.inc}
 
 interface

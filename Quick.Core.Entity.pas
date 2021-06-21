@@ -29,6 +29,8 @@
 
 unit Quick.Core.Entity;
 
+{$M+}
+
 {$i QuickCore.inc}
 
 interface

@@ -29,6 +29,8 @@
 
 unit Quick.Core.Entity.DAO;
 
+{$M+}
+
 {$i QuickCore.inc}
 
 interface
