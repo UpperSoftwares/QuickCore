@@ -40,7 +40,8 @@ uses
   Quick.RTTI.Utils,
   System.Generics.Collections,
   Quick.Value,
-  Quick.Core.Mapping.Abstractions;
+  Quick.Core.Mapping.Abstractions,
+  Codesitelogging;
 
 type
 
@@ -287,27 +288,38 @@ begin
         obj := tgtprop.GetValue(aTgtObj).AsObject;
         if obj = nil then
         begin
-          if TRTTI.PropertyExists(aSrcObj.ClassInfo,tgtprop.Name) then obj := GetObjectProp(aSrcObj,tgtprop.Name).ClassType.Create// TObject.Create;
+          if TRTTI.PropertyExists(aSrcObj.ClassInfo,tgtprop.Name) and Assigned(GetObjectProp(aSrcObj,tgtprop.Name)) then
+          begin
+            tgtprop.SetValue(aTgtObj,GetObjectPropClass(aTgtObj,tgtprop.Name).Create);
+            obj := tgtprop.GetValue(aTgtObj).AsObject;
+          end
           else
           begin
-            if (Assigned(aProfileMap)) and (aProfileMap.fIgnoreAllNonExisting) then Continue;
+            if (Assigned(aProfileMap)) and (aProfileMap.fIgnoreAllNonExisting) then
+              Continue;
           end;
         end;
 
         if obj <> nil then
         begin
           try
-            if (rType.GetProperty(tgtprop.Name) <> nil)
-              and (not rType.GetProperty(tgtprop.Name).GetValue(aSrcObj).IsEmpty) then clname := rType.GetProperty(tgtprop.Name).GetValue(aSrcObj).AsObject.ClassName
-            else Continue;
+            if (rType.GetProperty(tgtprop.Name) <> nil) and (not rType.GetProperty(tgtprop.Name).GetValue(aSrcObj).IsEmpty) then
+              clname := rType.GetProperty(tgtprop.Name).GetValue(aSrcObj).AsObject.ClassName
+            else
+              Continue;
           except
             on E : Exception do raise EAutoMapperError.CreateFmt('Error mapping property "%s" : %s',[tgtprop.Name,e.message]);
           end;
-          if clname.StartsWith('TList') then ListMapper(rType.GetProperty(tgtprop.Name).GetValue(aSrcObj).AsObject,obj,aProfileMap)
-          else if clname.StartsWith('TObjectList') then ObjListMapper(rType.GetProperty(tgtprop.Name).GetValue(aSrcObj).AsObject,obj,aProfileMap)
-            else ObjMapper(rType.GetProperty(tgtprop.Name).GetValue(aSrcObj).AsObject,obj,aProfileMap,False)
+          if clname.StartsWith('TList') then
+            ListMapper(rType.GetProperty(tgtprop.Name).GetValue(aSrcObj).AsObject,obj,aProfileMap)
+          else
+          if clname.StartsWith('TObjectList') then
+            ObjListMapper(rType.GetProperty(tgtprop.Name).GetValue(aSrcObj).AsObject,obj,aProfileMap)
+          else
+            ObjMapper(rType.GetProperty(tgtprop.Name).GetValue(aSrcObj).AsObject,obj,aProfileMap,False)
         end
-        else raise EAutoMapperError.CreateFmt('Target object "%s" not autocreated by class',[tgtprop.Name]);
+        else
+          raise EAutoMapperError.CreateFmt('Target object "%s" not autocreated by class',[tgtprop.Name]);
       end;
     end;
   end;
