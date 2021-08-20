@@ -290,7 +290,12 @@ begin
         begin
           if TRTTI.PropertyExists(aSrcObj.ClassInfo,tgtprop.Name) and Assigned(GetObjectProp(aSrcObj,tgtprop.Name)) then
           begin
-            tgtprop.SetValue(aTgtObj,GetObjectPropClass(aTgtObj,tgtprop.Name).Create);
+            if GetObjectPropClass(aTgtObj,tgtprop.Name).ClassName.StartsWith('TObjectList') then
+              tgtprop.SetValue(aTgtObj,tgtprop.PropertyType.GetMethod('Create').Invoke(tgtprop.PropertyType.AsInstance.MetaclassType,[True]))
+            else
+              tgtprop.SetValue(aTgtObj,tgtprop.PropertyType.GetMethod('Create').Invoke(tgtprop.PropertyType.AsInstance.MetaclassType,[]));
+
+//            tgtprop.SetValue(aTgtObj,GetObjectPropClass(aTgtObj,tgtprop.Name).Create);
             obj := tgtprop.GetValue(aTgtObj).AsObject;
           end
           else
