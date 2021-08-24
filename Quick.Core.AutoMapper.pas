@@ -40,8 +40,7 @@ uses
   Quick.RTTI.Utils,
   System.Generics.Collections,
   Quick.Value,
-  Quick.Core.Mapping.Abstractions,
-  Codesitelogging;
+  Quick.Core.Mapping.Abstractions;
 
 type
 
