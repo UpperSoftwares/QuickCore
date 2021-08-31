@@ -88,7 +88,7 @@ type
     function CreateMap<TSource,TDestination : class, constructor>(aMapProc : TMapProc<TSource,TDestination> = nil) : TProfileMap;
   end;
 
-  TAutoMapper = class(TInterfacedObject,IMapper)
+  TAutoMapper = class(TInterfacedObject, IMapper)
   private
     fDefaultProfileMap : TProfileMap;
     fResolveUnmapped : Boolean;
@@ -287,20 +287,19 @@ begin
         obj := tgtprop.GetValue(aTgtObj).AsObject;
         if obj = nil then
         begin
-          if TRTTI.PropertyExists(aSrcObj.ClassInfo,tgtprop.Name) and Assigned(GetObjectProp(aSrcObj,tgtprop.Name)) then
+          if TRTTI.PropertyExists(aSrcObj.ClassInfo,tgtprop.Name) and not (TRTTI.GetPropertyValue(aSrcObj,tgtprop.Name).IsEmpty) then
           begin
-            if GetObjectPropClass(aTgtObj,tgtprop.Name).ClassName.StartsWith('TObjectList') then
+            if tgtprop.PropertyType.AsInstance.MetaclassType.ClassName.StartsWith('TObjectList') then
               tgtprop.SetValue(aTgtObj,tgtprop.PropertyType.GetMethod('Create').Invoke(tgtprop.PropertyType.AsInstance.MetaclassType,[True]))
             else
               tgtprop.SetValue(aTgtObj,tgtprop.PropertyType.GetMethod('Create').Invoke(tgtprop.PropertyType.AsInstance.MetaclassType,[]));
 
-//            tgtprop.SetValue(aTgtObj,GetObjectPropClass(aTgtObj,tgtprop.Name).Create);
             obj := tgtprop.GetValue(aTgtObj).AsObject;
           end
           else
           begin
-            if (Assigned(aProfileMap)) and (aProfileMap.fIgnoreAllNonExisting) then
-              Continue;
+            if (Assigned(aProfileMap)) and aProfileMap.fIgnoreAllNonExisting then
+                Continue;
           end;
         end;
 
@@ -308,7 +307,9 @@ begin
         begin
           try
             if (rType.GetProperty(tgtprop.Name) <> nil) and (not rType.GetProperty(tgtprop.Name).GetValue(aSrcObj).IsEmpty) then
+            begin
               clname := rType.GetProperty(tgtprop.Name).GetValue(aSrcObj).AsObject.ClassName
+            end
             else
               Continue;
           except
@@ -317,7 +318,7 @@ begin
           if clname.StartsWith('TList') then
             ListMapper(rType.GetProperty(tgtprop.Name).GetValue(aSrcObj).AsObject,obj,aProfileMap)
           else
-          if clname.StartsWith('TObjectList') then
+          if clname.StartsWith('TObjectList') or clname.Contains('Collection') then
             ObjListMapper(rType.GetProperty(tgtprop.Name).GetValue(aSrcObj).AsObject,obj,aProfileMap)
           else
             ObjMapper(rType.GetProperty(tgtprop.Name).GetValue(aSrcObj).AsObject,obj,aProfileMap,False)
