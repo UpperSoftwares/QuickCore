@@ -120,7 +120,7 @@ end;
 
 destructor TAutoMapper.Destroy;
 begin
-  fDefaultProfileMap.Free;
+//  fDefaultProfileMap.Free;
   inherited;
 end;
 
@@ -374,6 +374,7 @@ end;
 class destructor TProfile.Destroy;
 begin
   fMappings.Free;
+  fDefaultProfileMap.Free;
   inherited;
 end;
 
