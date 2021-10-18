@@ -1,13 +1,13 @@
 { ***************************************************************************
 
-  Copyright (c) 2016-2021 Kike Pérez
+  Copyright (c) 2016-2021 Kike Pï¿½rez
 
   Unit        : Quick.Core.AutoMapper
   Description : Core AutoMapper
-  Author      : Kike Pérez
+  Author      : Kike Pï¿½rez
   Version     : 1.0
   Created     : 07/02/2020
-  Modified    : 07/04/2021
+  Modified    : 07/07/2021
 
   This file is part of QuickCore: https://github.com/exilon/QuickCore
 
@@ -120,7 +120,7 @@ end;
 
 destructor TAutoMapper.Destroy;
 begin
-//  fDefaultProfileMap.Free;
+  fDefaultProfileMap := nil;
   inherited;
 end;
 
@@ -374,7 +374,8 @@ end;
 class destructor TProfile.Destroy;
 begin
   fMappings.Free;
-  fDefaultProfileMap.Free;
+  if Assigned(fDefaultProfileMap) then fDefaultProfileMap.Free;
+  fDefaultProfileMap := nil;
   inherited;
 end;
 

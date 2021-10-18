@@ -43,8 +43,12 @@ type
   ['{0E859677-5431-4D2E-9E3F-F288AECDA75E}']
     function Push(const aMessage : T) : TMSQWaitResult;
     function Pop(out oMessage : T) : TMSQWaitResult;
-    function Remove(const aMessage : T) : Boolean;
-    function Failed(const aMessage : T) : Boolean;
+    function Remove(const aMessage : T) : Boolean; overload;
+    function Remove(const aCurrentMessage, aProcessedMessage : T) : Boolean; overload;
+    function Remove(const aCurrentMessage : T; aBeforeSaveToDones : TProc<T>) : Boolean; overload;
+    function Failed(const aMessage : T) : Boolean; overload;
+    function Failed(const aCurrentMessage, aProcessedMessage : T) : Boolean; overload;
+    function Failed(const aCurrentMessage : T; aBeforeSaveToFaileds : TProc<T>) : Boolean; overload;
   end;
 
 implementation

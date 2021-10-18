@@ -1,13 +1,13 @@
 { ***************************************************************************
 
-  Copyright (c) 2016-2020 Kike Pérez
+  Copyright (c) 2016-2021 Kike Pérez
 
   Unit        : Quick.Core.Entity.Engine.FireDAC
   Description : Core Entity FireDAC Provider
   Author      : Kike Pérez
-  Version     : 1.1
+  Version     : 1.2
   Created     : 15/07/2020
-  Modified    : 09/06/2020
+  Modified    : 04/10/2021
 
   This file is part of QuickCore: https://github.com/exilon/QuickCore
 
@@ -53,16 +53,18 @@ uses
   FireDAC.Phys.MSAcc,
   {$ENDIF}
   //FireDAC.Phys.MSSQL,
-  {$IFDEF CONSOLE}
-    FireDAC.ConsoleUI.Wait,
-  {$ELSE}
-    FireDAC.UI.Intf,
-    {$IFDEF VCL}
-    FireDAC.VCLUI.Wait,
+  {$IFDEF FIREDAC_SHOW_WAITCURSOR}
+    {$IFDEF CONSOLE}
+      FireDAC.ConsoleUI.Wait,
     {$ELSE}
-    FireDAC.FMXUI.Wait,
+      FireDAC.UI.Intf,
+      {$IFDEF VCL}
+      FireDAC.VCLUI.Wait,
+      {$ELSE}
+      FireDAC.FMXUI.Wait,
+      {$ENDIF}
+      FireDAC.Comp.UI,
     {$ENDIF}
-    FireDAC.Comp.UI,
   {$ENDIF}
   {$IFDEF DELPHIRX104_UP}
   FireDAC.Phys.SQLiteWrapper.Stat,
@@ -80,6 +82,7 @@ type
     fInternalQuery : TFDQuery;
     function GetDriverID(aDBProvider : TDBProvider) : string;
   protected
+    function GetDefName : string;
     function CreateConnectionString: string; override;
     procedure DoExecuteSQLQuery(const aQueryText : string); override;
     procedure DoOpenSQLQuery(const aQueryText: string); override;
@@ -101,6 +104,7 @@ type
 
   TFireDACEntityQuery<T : class, constructor> = class(TEntityQuery<T>)
   private
+    fFDConnection : TFDConnection;
     fConnection : TDBConnectionSettings;
     fQuery : TFDQuery;
   protected
@@ -116,10 +120,11 @@ type
     function Eof : Boolean; override;
 
   end;
-
-{$IFNDEF CONSOLE}
-var
-  FDGUIxWaitCursor : TFDGUIxWaitCursor;
+{$IFDEF FIREDAC_SHOW_WAITCURSOR}
+  {$IFNDEF CONSOLE}
+  var
+    FDGUIxWaitCursor : TFDGUIxWaitCursor;
+  {$ENDIF}
 {$ENDIF}
 
 implementation
@@ -130,15 +135,29 @@ constructor TFireDACEntityDataBase.Create;
 begin
   inherited;
   fFireDACConnection := TFDConnection.Create(nil);
+  fFireDACConnection.UpdateOptions.LockMode := FireDAC.Stan.Option.TFDLockMode.lmPessimistic;
+  fFireDACConnection.UpdateOptions.LockWait := True;
+  fFireDACConnection.ResourceOptions.AutoReconnect := True;
+  //fFireDACConnection.UpdateOptions.UpdateMode := Data.DB.TUpdateMode.upWhereAll;
+  //fFireDACConnection.UpdateOptions.LockWait := True;
+  //fFireDACConnection.UpdateOptions.LockMode := FireDAC.Stan.Option.TFDLockMode.lmPessimistic;
+  //fFireDACConnection.UpdateOptions.LockPoint := FireDAC.Stan.Option.TFDLockPoint.lpImmediate;
+  //fFireDACConnection.UpdateOptions.AssignedValues := [FireDAC.Stan.Option.TFDUpdateOptionValues.uvLockMode,FireDAC.Stan.Option.TFDUpdateOptionValues.uvLockPoint,FireDAC.Stan.Option.TFDUpdateOptionValues.uvLockWait];
   fInternalQuery := TFDQuery.Create(nil);
+  fInternalQuery.ResourceOptions.SilentMode := True;
+  fInternalQuery.FetchOptions.Mode := FireDAC.Stan.Option.TFDFetchMode.fmAll;
+  fInternalQuery.UpdateOptions.LockMode := FireDAC.Stan.Option.TFDLockMode.lmPessimistic;
+  fInternalQuery.UpdateOptions.LockWait := True;
+  //fInternalQuery.UpdateOptions.LockMode := FireDAC.Stan.Option.TFDLockMode.lmnone;
 end;
 
 constructor TFireDACEntityDataBase.CreateFromConnection(aConnection: TFDConnection; aOwnsConnection : Boolean);
 begin
   Create;
-  if OwnsConnection then fFireDACConnection.Free;
+  //if OwnsConnection then fFireDACConnection.Free;
   OwnsConnection := aOwnsConnection;
-  fFireDACConnection := aConnection;
+  //fFireDACConnection := aConnection;
+  fFireDACConnection.ConnectionDefName := aConnection.ConnectionDefName;
 end;
 
 destructor TFireDACEntityDataBase.Destroy;
@@ -157,10 +176,30 @@ begin
 end;
 
 function TFireDACEntityDataBase.Connect: Boolean;
+var
+  value : string;
+  params : TStringList;
 begin
   //creates connection string based on parameters of connection property
   inherited;
-  fFireDACConnection.ConnectionString := CreateConnectionString;
+  //pooled
+  FDManager.Close;
+  params := TStringList.Create;
+  try
+    for value in CreateConnectionString.Split([';']) do params.Add(value);
+    FDManager.AddConnectionDef(GetDefName,fFireDACConnection.DriverName,params);
+  finally
+    params.Free;
+  end;
+  //FDManager.ConnectionDefs.ConnectionDefByName(GetDefName).Params.Pooled := True;
+  FDManager.Open;
+  //create internal connection
+  //fFireDACConnection.ConnectionString := CreateConnectionString;
+  fFireDACConnection.ConnectionDefName := GetDefName;
+  fFireDACConnection.ResourceOptions.KeepConnection := True;
+  fFireDACConnection.ResourceOptions.AutoReconnect := True;
+  fFireDACConnection.LoginPrompt := False;
+  //connect to db
   fFireDACConnection.Connected := True;
   fInternalQuery.Connection := fFireDACConnection;
   Result := IsConnected;
@@ -168,12 +207,35 @@ begin
   CreateIndexes;
 end;
 
-function TFireDACEntityDataBase.CreateConnectionString: string;
+function TFireDACEntityDataBase.GetDefName : string;
 begin
-  if Connection.IsCustomConnectionString then Result := Format('DriverID=%s;%s',[GetDriverID(Connection.Provider),Connection.GetCustomConnectionString])
+  Result := Connection.Server + '_' + Connection.Database;
+end;
+
+function TFireDACEntityDataBase.CreateConnectionString: string;
+var
+  pair : string;
+  param : string;
+  value : string;
+begin
+  if Connection.IsCustomConnectionString then
+  begin
+    //SharedCache=False;LockingMode=Normal;Synchronous=Normal;
+    Result := Format('DriverID=%s;%s;Pooled=True;SharedCache=False;LockingMode=Normal;Synchronous=Normal;',[GetDriverID(Connection.Provider),Connection.GetCustomConnectionString]);
+    for pair in Connection.GetCustomConnectionString.Split([';']) do
+    begin
+      value := pair.Substring(pair.IndexOf('=')+1);
+      param := pair.Substring(0,pair.IndexOf('='));
+      param := param.Trim.ToLower;
+      if param = 'server' then Connection.Server := value
+      else if param = 'database' then Connection.Database := value
+      else if param = 'user_name' then Connection.UserName := value
+      else if param = 'password' then Connection.Password := value;
+    end;
+  end
   else
   begin
-    Result := Format('DriverID=%s;User_Name=%s;Password=%s;Database=%s;Server=%s',[
+    Result := Format('DriverID=%s;User_Name=%s;Password=%s;Database=%s;Server=%s;Pooled=True;',[
                               GetDriverID(Connection.Provider),
                               Connection.UserName,
                               Connection.Password,
@@ -275,7 +337,8 @@ var
 begin
   sl := TStringList.Create;
   try
-    fInternalQuery.Connection.GetTableNames(Connection.Database,'dbo','',sl,[osMy],[tkTable],True);
+    fInternalQuery.Connection.GetTableNames('', '', '', sl);
+    //fInternalQuery.Connection.GetTableNames(Connection.Database,'dbo','',sl,[osMy],[tkTable],True);
     Result := StringsToArray(sl);
   finally
     sl.Free;
@@ -297,14 +360,34 @@ end;
 constructor TFireDACEntityQuery<T>.Create(aEntityDataBase : TEntityDatabase; aModel : TEntityModel; aQueryGenerator : IEntityQueryGenerator);
 begin
   inherited;
+  fFDConnection := TFDConnection.Create(nil);
+  fFDConnection.ConnectionDefName := TFireDACEntityDataBase(aEntityDataBase).GetDefName;
+  fFDConnection.UpdateOptions.LockMode := FireDAC.Stan.Option.TFDLockMode.lmPessimistic;
+  fFDConnection.UpdateOptions.LockWait := True;
+  fFDConnection.ResourceOptions.AutoReconnect := True;
+  //fFireDACConnection.UpdateOptions.UpdateMode := Data.DB.TUpdateMode.upWhereAll;
+  //fFDConnection.UpdateOptions.LockWait := True;
+  //fFDConnection.UpdateOptions.LockMode := FireDAC.Stan.Option.TFDLockMode.lmPessimistic;
+  //fFDConnection.UpdateOptions.LockPoint := FireDAC.Stan.Option.TFDLockPoint.lpImmediate;
+  //fFireDACConnection.UpdateOptions.AssignedValues := [FireDAC.Stan.Option.TFDUpdateOptionValues.uvLockMode,FireDAC.Stan.Option.TFDUpdateOptionValues.uvLockPoint,FireDAC.Stan.Option.TFDUpdateOptionValues.uvLockWait];
   fQuery := TFDQuery.Create(nil);
-  fQuery.Connection := TFireDACEntityDataBase(aEntityDataBase).fFireDACConnection;
+  fQuery.Connection := fFDConnection; //TFireDACEntityDataBase(aEntityDataBase).fFireDACConnection;
   fConnection := aEntityDataBase.Connection;
+  fQuery.ResourceOptions.SilentMode := True;
+  fQuery.FetchOptions.Mode := FireDAC.Stan.Option.TFDFetchMode.fmAll;
+  fQuery.UpdateOptions.LockMode := FireDAC.Stan.Option.TFDLockMode.lmPessimistic;
+  fQuery.UpdateOptions.LockWait := True;
+  //fQuery.UpdateOptions.LockMode := FireDAC.Stan.Option.TFDLockMode.lmnone;
 end;
 
 destructor TFireDACEntityQuery<T>.Destroy;
 begin
   if Assigned(fQuery) then fQuery.Free;
+  if Assigned(fFDConnection) then
+  begin
+    fFDConnection.Close;
+    fFDConnection.Free;
+  end;
   inherited;
 end;
 
@@ -352,14 +435,18 @@ end;
 
 initialization
   //if (IsConsole) or (IsService) then CoInitialize(nil);
-  {$IFNDEF CONSOLE}
-  FDGUIxWaitCursor := TFDGUIxWaitCursor.Create(nil);
+  {$IFDEF FIREDAC_SHOW_WAITCURSOR}
+    {$IFNDEF CONSOLE}
+    FDGUIxWaitCursor := TFDGUIxWaitCursor.Create(nil);
+    {$ENDIF}
   {$ENDIF}
 
 finalization
   //if (IsConsole) or (IsService) then CoUninitialize;
-  {$IFNDEF CONSOLE}
-  FDGUIxWaitCursor.Free;
+  {$IFDEF FIREDAC_SHOW_WAITCURSOR}
+    {$IFNDEF CONSOLE}
+    FDGUIxWaitCursor.Free;
+    {$ENDIF}
   {$ENDIF}
 
 end.
