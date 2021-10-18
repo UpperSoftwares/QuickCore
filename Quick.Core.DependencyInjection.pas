@@ -129,6 +129,7 @@ type
     function AddOptions(aOptionsFileFormat : TOptionsFileFormat = ofJSON; aReloadOnChange : Boolean = True; const aOptionsFileName: string = ''): TServiceCollection; overload;
     function AddOptions(aSerializer : IOptionsSerializer; aReloadOnChange : Boolean; const aOptionsFileName : string = '') : TServiceCollection; overload;
     function AddTypedFactory<TFactoryInterface : IInterface; TFactoryType : class, constructor>(const aName : string = '') : TServiceCollection;
+    function AddSimpleFactory<TInterface : IInterface; TImplementation : class, constructor>(const aName : string = '') : TServiceCollection;
     function AddLogging(aLoggerService: ILogger): TServiceCollection;
     function AddDebugger : TServiceCollection;
     function AddCommandline<TArguments : TParameters> : TServiceCollection;
@@ -354,6 +355,13 @@ begin
   fDependencyInjector.RegisterInstance<TImplementation>(aName).AsSingleton;
 end;
 
+function TServiceCollection.AddSimpleFactory<TInterface, TImplementation>(const aName: string): TServiceCollection;
+begin
+  Result := Self;
+  fDependencyInjector.RegisterSimpleFactory<TInterface,TImplementation>;
+  //fDependencyInjector.RegisterType<IFactory<TInterface>,TSimpleFactory<TInterface,TImplementation>>(aName).AsSingleton;
+end;
+
 function TServiceCollection.AddSingleton<TImplementation>(const aName: string; aDelegator: TActivatorDelegate<TImplementation>): TServiceCollection;
 begin
   Result := Self;
@@ -401,7 +409,7 @@ begin
   if Assigned(fOptionsService) then
   begin
     canSave := False;
-    for i := 0 to fOptionsService.Count do
+    for i := 0 to fOptionsService.Count-1 do
     begin
       if not fOptionsService.Items[i].HideOptions then
       begin
