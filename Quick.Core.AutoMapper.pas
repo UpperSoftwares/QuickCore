@@ -1,13 +1,13 @@
 { ***************************************************************************
 
-  Copyright (c) 2016-2021 Kike Pï¿½rez
+  Copyright (c) 2016-2021 Kike Pérez
 
   Unit        : Quick.Core.AutoMapper
   Description : Core AutoMapper
-  Author      : Kike Pï¿½rez
+  Author      : Kike Pérez
   Version     : 1.0
   Created     : 07/02/2020
-  Modified    : 07/07/2021
+  Modified    : 07/04/2021
 
   This file is part of QuickCore: https://github.com/exilon/QuickCore
 
@@ -40,7 +40,8 @@ uses
   Quick.RTTI.Utils,
   System.Generics.Collections,
   Quick.Value,
-  Quick.Core.Mapping.Abstractions;
+  Quick.Core.Mapping.Abstractions,
+  CodeSiteLogging;
 
 type
 
@@ -120,7 +121,7 @@ end;
 
 destructor TAutoMapper.Destroy;
 begin
-  fDefaultProfileMap := nil;
+//  fDefaultProfileMap.Free;
   inherited;
 end;
 
@@ -356,7 +357,12 @@ begin
     for i := 0 to value.GetArrayLength - 1 do
     begin
       obj := typinfo.TypeData.ClassType.Create;
-      ObjMapper(value.GetArrayElement(i).AsObject,obj,aProfileMap,False);
+
+//      CodeSite.Send(value.GetArrayElement(i).ToString);
+//      ObjMapper(value.GetArrayElement(i).AsObject,obj,aProfileMap,False);
+
+      Map(value.GetArrayElement(i).AsObject,obj);
+
       TObjectList<TObject>(aTgtObjList).Add(obj);
     end;
   end;
@@ -374,8 +380,7 @@ end;
 class destructor TProfile.Destroy;
 begin
   fMappings.Free;
-  if Assigned(fDefaultProfileMap) then fDefaultProfileMap.Free;
-  fDefaultProfileMap := nil;
+  fDefaultProfileMap.Free;
   inherited;
 end;
 
